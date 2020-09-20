@@ -2,7 +2,9 @@
 title: "Reading course notes"
 author: "Haoluan Chen"
 date: "9/11/2020"
-output: html_document
+output:
+  html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -10,10 +12,10 @@ knitr::opts_chunk$set(echo = TRUE)
 library(dplyr)
 library(tidytext)
 library(ggplot2)
-library(tidyr)
 library(scales)
+library(tidyr)
 library(wordcloud)
-
+library(igraph)
 ```
 
 # Chapter 1 
@@ -24,7 +26,7 @@ Tidy data structure:
 * Each observation is a row
 * Each type of observational unit is a table
 
-Some defination:\
+Some definition:\
 Tidy text format - a table with one-token-per-row\
 Token - a meaningful unit of text (e.g a word that we are interested in analysis)\
 Tokenization - a process of splitting text into tokens\
@@ -109,6 +111,8 @@ plot1 <- news_df %>%
   geom_col() +
   xlab(NULL) + 
   coord_flip()
+
+plot1
 ```
 
 Here is the most common words in the news article
@@ -172,7 +176,7 @@ plot1
 
 Lets compare the most common word between two article.
 
-Note: I had some problem producing the plot in this seesion
+Note: I had some problem producing the plot in this session
 in comparing frequency, So I am comparing the most common words between two article.
 ```{r eval=FALSE, include=FALSE}
 frequency <- bind_rows(mutate(news_df, news = "1"),
@@ -240,7 +244,7 @@ news_df %>%
   count(word, sort = TRUE)
 ```
 
-Since we have a small data set, there are only four negative words in our first article.
+Since we have a small data set, there are only 5 negative words in our first article.
 
 ```{r}
 news2_df %>% 
@@ -271,7 +275,7 @@ ggplot(news_sentiment, aes(index, sentiment)) +
   scale_x_discrete(limits = c(0, 2, 4, 6, 8))
 ```
 
-As the result shown, our article are likely to be negative. (Again we have a very small dataset)
+As the result shown, our article are likely to be negative. (Again we have a very small data set)
 
 ## 2.3 Comparing the three sentiment dictionaries
 Let's use all three sentiment lexicons on the article.
@@ -313,7 +317,7 @@ bind_rows(afinn, bing_and_nrc) %>%
 
 As we can see in the plot, three different lexicons for calculating sentiment in our article gives very different result due to the small data size. 
 
-However, according to the book, we see similar dips and peaks in sentiment at about the same places in the novel, but absolute values are significantly different. AFINN lexicon gives largest absolute value, Bing gives lower absolute values, and the NRC labled the text more positively.
+However, according to the book, we see similar dips and peaks in sentiment at about the same places in the novel, but absolute values are significantly different. AFINN lexicon gives largest absolute value, Bing gives lower absolute values, and the NRC labeled the text more positively.
 
 "the NRC sentiment is high, the AFINN sentiment has more variance, the Bing et al. sentiment appears to find longer stretches of similar text, but all three agree roughly on the overall trends in the sentiment through a narrative arc."
 
@@ -327,9 +331,9 @@ get_sentiments("bing") %>%
   count(sentiment)
 ```
 
-As we can see, both lexicons ahve more negative words than postive words, but the ratio of negative to postive words is higher in the Bing than NRC. This is the reason that we see higher sentiment scores in the NRC.
+As we can see, both lexicons have more negative words than positive words, but the ratio of negative to positive words is higher in the Bing than NRC. This is the reason that we see higher sentiment scores in the NRC.
 
-Also, if the negative words in the NRC do not match the words we are analysing very well, then "whatever the source of these differences, we see similar relative trajectories across the narrative arc, with similar changes in slope, but marked differences in absolute sentiment from lexicon to lexicon."
+Also, if the negative words in the NRC do not match the words we are analyzing very well, then "whatever the source of these differences, we see similar relative trajectories across the narrative arc, with similar changes in slope, but marked differences in absolute sentiment from lexicon to lexicon."
 
 This is important to keep in mind when choosing a sentiment lexicon for analysis. 
 
@@ -351,12 +355,11 @@ nrc_word_count %>%
   coord_flip()
 ```
 
-Problem: Since my article data set is small, we can spot problem in my analysis that patient and confirmed are negative in my case. How do we spot there kinds of problem when we have very big dataset?
+Problem: Since my article data set is small, we can spot problem in my analysis that patient and confirmed are negative in my case. How do we spot there kinds of problem when we have very big data set?
 
 ## 2.5 Wordclouds 
 ```{r}
 library(janeaustenr)
-library(dplyr)
 library(stringr)
 
 tidy_books <- austen_books() %>%
@@ -381,9 +384,9 @@ tidy_books %>%
 
 Note that since my data set is small, I am using the data set in the text book to create these wordcloud.
 
-To tag positive and negative words, we will have to turn the datafram into matrix with reshape2 (acast()) function and use comparison.cloud().
+To tag positive and negative words, we will have to turn the dataframe into matrix with reshape2 (acast()) function and use comparison.cloud().
 
-The size of the word's test in the wordcloud is in proportion to its frequency in the document. We use word cloud to visually see the most frequent postive and negative words, but the size is not comparable across sentiments
+The size of the word's test in the wordcloud is in proportion to its frequency in the document. We use word cloud to visually see the most frequent positive and negative words, but the size is not comparable across sentiments
 
 ## 2.6 Looking at units beyond just words
 Sometimes it is useful to look at different unit of text. For example, try to understand the sentiment of a sentence as a whole. We can tokenize text into sentences.
@@ -397,7 +400,7 @@ news_sentences
 
 We can use unnest_tokens() to split into tokens using a regex patter. It is not needed for my case.
 
-Now, we can find the porportion of negative words in the article. 
+Now, we can find the proportion of negative words in the article. 
 
 ```{r}
 bingnegative <- get_sentiments("bing") %>% 
@@ -412,18 +415,18 @@ news_df %>%
 
 ```
 
-We can compare the negative wor ration with other documents, since it is normalized by the text length. 
+We can compare the negative words ratio with other documents, since it is normalized by the text length. 
 
 ## 2.7 Summary
-Sentiment analysis can help understand the attitudes and opnions expressed in text. "We can use sentiment analysis to understand how a narrative arc changes throughout a book or what words with emotional and opinon content are important for a particular text."
-We can also compare differnt emotional and opinion content between different documents. 
+Sentiment analysis can help understand the attitudes and opinions expressed in text. "We can use sentiment analysis to understand how a narrative arc changes throughout a book or what words with emotional and opinion content are important for a particular text."
+We can also compare different emotional and opinion content between different documents. 
 
 ## 3 Analyzing word and document frequency: tf-idf
 term frequency(tf) is measure of how frequently a word occurs in a document.
 
-inverse document frequency(idf) which decrease the weight for commonly used words and increases the weight for words that are ot used very often. 
+inverse document frequency(idf) which decrease the weight for commonly used words and increases the weight for words that are not used very often. 
 
-These two frequency can be combined to calucate tf-idf. So the frequency of a term is adjusted for how rarely it is used
+These two frequency can be combined to calculate tf-idf. So the frequency of a term is adjusted for how rarely it is used
 
 tf-idf - "intended to measure how important a word is to a document in a collection (or corpus) of documents"
 
@@ -432,7 +435,12 @@ The inverse document frequency for any given term is defined as:
 $$idf(term) = ln(\frac{n_{documents}}{n_{documents Containg Term}}) $$
 
 ## 3.1 Term frequency in Jane Austen's novels
-From pervious examples, I realized that my data set was too small for our model. I add few more article to my data set to run the examples.
+From previous examples, I realized that my data set was too small for our model. I used more articles as my data set to run the examples blow.
+
+https://www.cbc.ca/news/canada/world-canada-covid-19-sept-15-1.5724311
+https://www.ctvnews.ca/health/coronavirus/canada-very-well-might-be-starting-its-second-wave-of-covid-19-doctor-says-1.5105105
+https://ottawacitizen.com/news/local-news/covid-19-five-deaths-in-west-end-villa-outbreak-51-new-cases-in-ottawa-elliott-says
+
 ```{r include=FALSE}
 newsdata <- c("Some provinces are scrambling to increase testing capacity as coronavirus infections spike across Canada and lineups at COVID-19 testing sites see a significant influx of people. 
 
@@ -584,7 +592,7 @@ news_word <- left_join(news_word, total_words)
 news_word
 ```
 
-Here in the news_word data frame, we have each word_article combination per row. n is the number of occurance of that word in the article. Total is the total words in that article. We can look at the distributioin of n/total for each article.
+Here in the news_word data frame, we have each word_article combination per row. n is the number of occurrence of that word in the article. Total is the total words in that article. We can look at the distribution of n/total for each article.
 
 ```{r}
 ggplot(news_word, aes(n/total, fill = article)) +
@@ -617,6 +625,7 @@ freq_by_rank %>%
   scale_x_log10() +
   scale_y_log10()
 ```
+
 We see that the relationship between rank and frequency does have a negative slope
 ```{r}
 rank_subset <- freq_by_rank %>% 
@@ -638,7 +647,317 @@ The idea of tf-idf is to find the important words in our document by decreasing 
 ```{r}
 news_word <- news_word %>% 
   bind_tf_idf(word, article, n)
-news_word
 ```
 
-Notice that idf and tf-idf are zeon for extremely common words. And the inverse document frequency will be higher for words that occur in fewer of the documents in the collections. 
+Notice that idf and tf-idf are zero for extremely common words. The inverse document frequency will be higher for words that occur in fewer of the documents in the collections. In opposite, the inverse document frequency and tf-idf is very low (close to zero) for words that occur in many of the articles.
+
+Now, let's look at a visualization for the ti-idf words in our article
+
+```{r}
+news_word <-news_word%>% 
+  arrange(desc(tf_idf)) %>%
+  mutate(word = factor(word, levels = rev(unique(word))))
+news_word
+news_word %>%
+  arrange(desc(tf_idf)) %>%
+  group_by(article) %>% 
+  top_n(10) %>% 
+  ungroup() %>% 
+  ggplot(aes(word, tf_idf, fill = article)) +
+  geom_col(show.legend = FALSE) +
+  labs(x = NULL, y = "tf-idf") +
+  facet_wrap(~article, ncol = 2, scales = "free") +
+  coord_flip()
+```
+
+## 3.4 A corpus of physics texts
+In the book, they analyzed some classic physics from package Project Gutenberg using tf-idf. For me I will review the steps for tf-idf analysis.
+
+* use unnest_tokens() to tokenzie each words in our data
+* use count() to find how many times each word was used
+* use bind_tf_idf() to calculate tf-idf (considering all text have different length)
+* use ggplot() to create visualizations showing the highest tf-df words in the data
+* check our result, check for names and some less meaningful words.
+* remove the less meaningful words by using a custom list of stop words and use anti_join to remove them. 
+* recalculate the tf-idf using bind_tf_idf() and remake the plot!
+
+
+## 3.5 summary
+Using tf-idf allows us to find words that are special to one document within a collection of documents and how different words are important in documents within a collection or corpus of documents.
+
+## 4 Ralationships between words: n-grams and correlations
+So far we working on word as individual units and considered their relationship to sentiments or to documents. However, we can also analyses based on the relationships between words. Examining which words tend to follow others immediately, or which words tend to co-occur within the same documents.
+
+## 4.1 Tokenizing by n-gram
+We can use unnest_tokens() to tokenize text into consecutive sequences of words, called n-grams. By seeing how often word X is followed by word Y, we can build a model of the relationship between them. We can do it by ading token = "ngrams" when using unnest_tokens(), and setting n to the number of words we want to capture in each n-gram. (when n = 2, examining pairs of two consecutive words, also called "bigrams")
+
+```{r}
+news_word <- tibble(article = 1:3, text = newsdata)
+news_bigrams <- news_word %>% 
+  unnest_tokens(bigram, text, token = "ngrams", n = 2)
+news_bigrams
+```
+
+Note that this data structure is still in tidy text format(one-token-per-row), but each token now represents a bigram.
+
+## 4.1.1 Counting and filtering n-grams
+We can see the most common bigrams using count()
+
+```{r}
+news_bigrams %>% 
+  count(bigram, sort = TRUE)
+```
+
+A lot of most common bigrams are pairs of common words (of the, to the) these may be uninteresting. So, we can use separate() function to splot a column into multiple based on a delimiter. We can split the bigrams into "word1" and "word2", then we can remove the stop words.
+
+```{r}
+bigrams_separated <- news_bigrams %>%
+  separate(bigram, c("word1", "word2"), sep = " ")
+
+bigrams_filtered <- bigrams_separated %>%
+  filter(!word1 %in% stop_words$word) %>%
+  filter(!word2 %in% stop_words$word)
+
+# new bigram counts:
+bigram_counts <- bigrams_filtered %>% 
+  count(word1, word2, sort = TRUE)
+
+news_bigrams %>% 
+  count(bigram, sort = TRUE)
+bigram_counts
+```
+
+Then, we can recombine the words into bigrams by using unite()
+
+```{r}
+bigrams_united <- bigrams_filtered %>%
+  unite(bigram, word1, word2, sep = " ")
+
+bigrams_united
+```
+
+In some cases, we may be interested in the most common trigrams (n = 3), which are consecutive sequences of 3 words.
+
+## 4.1.2 Analyzing bigrams
+A bigram can also be treated as a term in a document. Thus, we can look at the tf-idf of the bigrams in the articles. 
+
+```{r}
+bigram_tf_idf <- bigrams_united %>%
+  count(article, bigram) %>%
+  bind_tf_idf(bigram, article, n) %>%
+  arrange(desc(tf_idf))
+
+bigram_tf_idf
+
+bigram_tf_idf %>% 
+  group_by(article) %>% 
+  top_n(3) %>% 
+  ungroup() %>% 
+  ggplot(aes(bigram, tf_idf, fill = article)) +
+  geom_col(show.legend = FALSE) +
+  labs(x = NULL, y = "tf-idf") +
+  facet_wrap(~article, ncol = 2, scales = "free") +
+  coord_flip()
+```
+
+The advantage to examining the tf-idf of bigrams is that it may capture structure that isn't present when counting single words, and may provide context more understandable. However, the disadvantages are that a typical two-word pair is rarer than single word. Thus, bigrams can be especially useful when we have large data set. In our case, it is not very useful to use bigram to analysis our article.
+
+## 4.1.3 Using bigrams to provide context in sentiment analysis
+
+Now that we have our data organized into bigrams, it's east to tell how often words are preceded by a word "not"
+
+```{r}
+bigrams_separated %>% 
+  filter(word1 == "not") %>% 
+  count(word1, word2, sort = TRUE)
+```
+
+By performing sentiment analysis on bigram, we can see how often sentiment-associated words are preceded by "not" or other negating words. We may use this to ignore or reverse the sentiment socre.
+
+Let's use AFINN for sentiment analysis. 
+```{r}
+AFINN <- get_sentiments("afinn")
+
+not_words <- bigrams_separated %>%
+  filter(word1 == "not") %>%
+  inner_join(AFINN, by = c(word2 = "word")) %>%
+  count(word2, value, sort = TRUE)
+
+not_words
+
+```
+
+unfortunately, because of our small data set, there are only 6 bigrams that contains "not", and the second word following the "not" in these 6 bigrams does not have a sentiment score in AFINN data set. 
+
+We can show which words contributed the most in the "wrong direction" in our sentiment analysis by computing the sentiment score and the number of times they appear. Then we can visualized the result with a bar plot.
+
+Looking at the bar plot, we can see the largest causes of misidentification(words that make the text seem much more positive/negative than it is)
+
+```{r}
+
+negation_words <- c("not", "no", "never", "without")
+
+negated_words <- bigrams_separated %>%
+  filter(word1 %in% negation_words) %>%
+  inner_join(AFINN, by = c(word2 = "word")) %>%
+  count(word1, word2, value, sort = TRUE)
+negated_words
+
+```
+
+We could then visualize what the most common words to follow each particular negation are.
+However, again our data set was too small to do it.
+
+
+## 4.1.4 Visualizing a network of bigrams with ggraph
+We can arrange the words into a network to visualize the relationship among words. It can be constructed from a tidy object with three variables:
+
+* from: the node an edge is coming from
+* to: the node an edge is going towards
+* weight: A numeric value associated with each edge
+
+We can use graph_from_data_frame() to produce an igraph object. It takes a data frame of edges with columns for "from", "to", and edge(in this case n)
+```{r}
+bigram_graph <- bigram_counts %>%
+  filter(n >1) %>% 
+  graph_from_data_frame()
+
+bigram_graph
+```
+
+
+Then, we can convert an igraph object into a ggraph to create the graph. 
+```{r fig.width =10}
+set.seed(2017)
+library(ggraph)
+ggraph(bigram_graph, layout = "fr") +
+  geom_edge_link() +
+  geom_node_point() +
+  geom_node_text(aes(label = name), vjust = 1, hjust = 1)
+```
+
+This graph shows the common bigrams that occurred more than once in our articles. 
+
+Something we can do to make a better looking graph:
+
+* add edge_alpha aesthetic to the link layer to make links transparent based on how common or rare the bigram is.
+
+* add directional arrow by using grid::arrow(), including an end_cap option that tells the arrow to end before touching the node.
+
+* add a theme using theme_void()
+```{r fig.width =10}
+a <- grid::arrow(type = "closed", length = unit(.15, "inches"))
+
+ggraph(bigram_graph, layout = "fr") +
+  geom_edge_link(aes(edge_alpha = n), show.legend = FALSE,
+                 arrow = a, end_cap = circle(.07, 'inches')) +
+  geom_node_point(color = "lightblue", size = 5) +
+  geom_node_text(aes(label = name), vjust = 1, hjust = 1) +
+  theme_void()
+```
+
+"Note that this is a visualization of a Markov chain, a common model in text processing. In a Markov chain, each choice of word depends only on the previous word."
+
+## 4.1.5 Visualizing bigrams in other texts
+We can write a function for clearning and visualizing bigrams on any text data set.
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(tidytext)
+library(ggplot2)
+library(igraph)
+library(ggraph)
+count_bigrams <- function(dataset) {
+  dataset %>%
+    unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
+    separate(bigram, c("word1", "word2"), sep = " ") %>%
+    filter(!word1 %in% stop_words$word,
+           !word2 %in% stop_words$word) %>%
+    count(word1, word2, sort = TRUE)
+}
+
+visualize_bigrams <- function(bigrams) {
+  set.seed(2016)
+  a <- grid::arrow(type = "closed", length = unit(.15, "inches"))
+  
+  bigrams %>%
+    graph_from_data_frame() %>%
+    ggraph(layout = "fr") +
+    geom_edge_link(aes(edge_alpha = n), show.legend = FALSE, arrow = a) +
+    geom_node_point(color = "lightblue", size = 5) +
+    geom_node_text(aes(label = name), vjust = 1, hjust = 1) +
+    theme_void()
+}
+```
+
+Using these count_bigrams and visualize_bigram function, we can easily perform data cleaning and visualizing bigrams on other text dataset.
+
+## 4.2 Counting and correlating pairs of words with the widyr package
+Tokenizing by n-gram is a useful way to explore pairs of adjacent words. However, we may be interested in words that tend to co-occur within particular documents, even if they are not next to each other. 
+It is easy for tidy data to compare between variables or grouping by rows, but it is hard to compare between rows. For example, to count the number of times that two words appear within the same document, or to see how correlated they are. We may use widyr package manipulate the data that can compare between rows.
+
+## Counting and correlating among sections
+```{r}
+news_word <- tibble(article = 1:3, text = newsdata)
+news_word <- news_word %>% 
+  unnest_tokens(word, text) %>% 
+  filter(!word %in% stop_words$word)
+
+news_word
+
+library(widyr)
+
+# count words co-occuring within sections
+word_pairs <- news_word %>%
+  pairwise_count(word, article, sort = TRUE)
+
+word_pairs
+```
+
+The result from the pairwise_count will count the common pairs of words co-appearing within our the same article.
+
+Now, we can see the words that most often occur with "Canada" in our article.
+```{r}
+word_pairs %>% 
+  filter(item1 == "canada")
+```
+
+## 4.2.2 Pairwise correlation
+We may also examine correlation among words, which indicates how often they appear together relative to how often they appear separately. 
+
+phi coefficient - a common measure for binary correlation
+
+$$\phi = \frac{n_{11}n_{00} - n_{10}n_{01}}{\sqrt{n_{1.}n_{0.}n_{.0}n{.1}}}$$
+where 
+
+* $n_{11}$ is the number of times both words appear in the document
+* $n_{00}$ is the number of times neither words appear
+* $n_{10}$ is the number of times first word appear and second word does not
+* $n_{01}$ is the number of times second word appear and first word does not
+* $n_{1.}$ is the total number of times first word appear
+* $n_{0.}$ is the total number of times first word does not appear
+* $n_{.1}$ is the total number of times second word appear
+* $n_{1.}$ is the total number of times second word does not appear
+* $n$ is the total number of words
+
+The pairwise_cor() function in widyr lets us find the phi coefficient between words based on how often they appear in the same section.
+
+```{r}
+word_cors <- news_word %>%
+  group_by(word) %>% 
+  filter(n() >= 5) %>% 
+  pairwise_cor(word, article, sort = TRUE)
+
+
+word_cors %>% 
+  filter(item2 == "wildfires")
+```
+
+Because our data set is too small, the correlation is not very interesting. :(
+
+If we have bigger data set, we may use a bar plot to plot the correlation. 
+
+
+## 4.3 Summary
+This chapter, we found relationship and connections between words in a form of n-grams. It enable us to see what words tend to appear after others, or co-occurrences and correlations. I also learn about network visualizations to show the connections between words. 
