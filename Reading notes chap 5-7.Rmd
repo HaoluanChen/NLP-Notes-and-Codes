@@ -499,7 +499,10 @@ In this chapter, I learned how to switch between different text data format. For
 
 
 # Overall summary
-There are many different types of data structure for different purpose. For example, with the tidy format, we may perform sentiment analysis, word frequency, and N-grams easily. However, with other data structure such as document-term matrix, we can use Latent Dirichlet allocation to build topic model. Also, keep in mind that these we can easily transform tidy data into DTM or other way around. \newline
-From topic modeling section, I learned the Latent Dirichlet allocation model. I think it is a very useful model for categorize different kind of document. I think we may use it to categorize different types of youtube video category (tech, vlog, sport.etc) based on its auto generated subtitle. However, it is a unsupervised learning algorithm, it is hard to select correct number of topics in our data. That may be another limitation of this model. \newline
-From chap 7 case study, I learned that every time you get a data set, you should look into the data structure and the variables. Then think about NLP techniques that may apply to the data set. I also found it hard to manipulate the data set into the format that I want it to be. That maybe something I need more practice on. (my chap 7 rcode is little messy)\newline
+There are many different types of data structure for different purpose. For example, with the tidy format, we may perform sentiment analysis, word frequency, and N-grams easily. However, with other data structure such as document-term matrix, we can use Latent Dirichlet allocation to build topic model. Also, keep in mind that these we can easily transform tidy data into DTM or other way around. \
+
+From topic modeling section, I learned the Latent Dirichlet allocation model. I think it is a very useful model for categorize different kind of document. I think we may use it to categorize different types of youtube video category (tech, vlog, sport.etc) based on its auto generated subtitle. However, it is a unsupervised learning algorithm, it is hard to select correct number of topics in our data. That may be another limitation of this model. \
+
+From chap 7 case study, I learned that every time you get a data set, you should look into the data structure and the variables. Then think about NLP techniques that may apply to the data set. I also found it hard to manipulate the data set into the format that I want it to be. That maybe something I need more practice on. (my chap 7 rcode is little messy)\
+
 I also explored many ggplot themes and colors in these section, I am planning to do a ggplot summary combine some of clean and aesthetic themes in the future.
