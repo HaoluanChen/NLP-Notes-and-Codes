@@ -1,0 +1,244 @@
+---
+title: "Reading notes Chap 7"
+author: "Haoluan Chen"
+date: "9/25/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tm)
+library(dplyr)
+library(tidytext)
+library(ggplot2)
+library(ggthemes)
+library(tidyr)
+library(topicmodels)
+library(rtweet)
+library(wordcloud)
+```
+
+## Case study: comparing Twitter archives
+This section, the book uses Twitter archive data. I will be using RTweet. 
+
+```{r}
+uoft <- get_favorites(user = "UofT")
+uoft
+ggplot(uoft, aes(x = created_at))+
+  geom_histogram(bins = 50)
+
+```
+
+Looking at the uoft tweets distribution. The data set contains about one month tweets that uoft post.
+
+## 7.2 Word frequencies
+Let's use unnext_tokens() to split the text into tidy format.
+
+```{r}
+library(scales)
+tidy_tweets_ut <- uoft %>% 
+  select( "created_at", "text") %>% 
+  unnest_tokens(word, text, token = "words") %>% 
+  anti_join(stop_words) %>%
+  count(word, sort = TRUE) 
+
+tidy_tweets_ut %>% summarise(total = n())
+
+frequency<- tidy_tweets_ut %>% 
+  mutate(freq = n/2972)
+frequency
+
+frequency<- frequency %>% 
+  filter(!(word == "t.co" | word == "https"))
+
+
+frequency %>% 
+  top_n(n) %>% 
+  mutate(word = reorder(word, freq)) %>%
+  ggplot(aes(word, freq)) +
+  geom_col( fill = ("red"), colour = "black") +
+  coord_flip() + 
+  theme_minimal()
+
+  
+
+```
+
+## 7.3 Comparing word usage
+Let's also look in to university of Waterloo twitter account 
+```{r}
+Uw <- get_favorites(user = "UWaterloo")
+Uw
+
+ggplot(Uw, aes(x = created_at)) +
+  geom_histogram(bins = 50)
+tidy_tweets_uw <- Uw %>% 
+  select( "created_at", "text") %>% 
+  unnest_tokens(word, text, token = "words") %>% 
+  anti_join(stop_words) %>%
+  count(word, sort = TRUE) 
+
+tidy_tweets_uw %>% summarise(total = n())
+frequency_uw<- tidy_tweets_uw %>% 
+  mutate(freq = n/3094)
+frequency_uw
+
+frequency_uw <- frequency_uw %>% 
+  filter(!(word == "t.co" | word == "https"))
+
+
+```
+
+```{r}
+
+frequency_uw %>% 
+  top_n(n) %>% 
+  mutate(word = reorder(word, freq)) %>%
+  ggplot(aes(word, freq)) +
+  geom_col( fill = ("#00abff"), colour = "black") +
+  coord_flip() + 
+  theme_minimal()+
+  labs(title ="Waterloo")
+
+frequency %>% 
+  top_n(n) %>% 
+  mutate(word = reorder(word, freq)) %>%
+  ggplot(aes(word, freq)) +
+  geom_col( fill = ("red"), colour = "black") +
+  coord_flip() + 
+  theme_minimal()+
+  labs(title ="U of T")
+
+frequency <- frequency %>% 
+  mutate(ut_n = n) %>% 
+  select(!n)
+
+frequency_uw <- frequency_uw %>% 
+  mutate(uw_n = n) %>% 
+  select(!n)
+
+frequency
+frequency_uw
+```
+Lookin at these plot I found that Waterloo talks about their uwaterlooalumni a lot in their tweets and u of t talks more about their research
+
+Now, we can calculate the log odds ratio for each word:
+$$log Odds Ratio = ln(\frac{(\frac{n+1}{total+1})_{ut}}{(\frac{n+1}{total+1})_{uw}}) $$
+
+Where n is the number of times the word is used by university, and the total indicates the total words for each person. 
+
+```{r}
+library(naniar)
+tidy_tweets <- full_join(frequency, frequency_uw, by = "word")
+tidy_tweets <- tidy_tweets %>% 
+  select(word, ut_n, uw_n)
+
+word_ratios <- tidy_tweets %>%
+  filter(!str_detect(word, "^@"))
+
+
+word_ratios <- word_ratios %>% 
+  mutate(ut_n = ifelse(is.na(ut_n), 0, ut_n)) %>% 
+  mutate(uw_n = ifelse(is.na(uw_n), 0, uw_n)) %>% 
+  mutate(ut = (ut_n + 1)/(2972+1)) %>% 
+  mutate(uw = (uw_n + 1)/(3094+1)) %>% 
+  mutate(logratio = log(ut / uw)) %>%
+  arrange(desc(logratio))
+
+word_ratios
+```
+
+```{r fig.height= 10}
+word_ratios %>%
+  group_by(logratio < 0) %>%
+  top_n(15, abs(logratio)) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, logratio)) %>%
+  ggplot(aes(word, logratio, fill = logratio < 0)) +
+  geom_col(show.legend = FALSE) +
+  coord_flip() +
+  ylab("log odds ratio (David/Julia)") +
+  scale_fill_discrete(name = "", labels = c("David", "Julia"))
+```
+
+## Next few sections
+Because the data set I used contain different information than the text book. I was not able to do some of the stuff that was in the text book. Here I will be applying stuff I learned in previous chapter such as word cloud and sentiment analysis. 
+
+# Creating word cloud
+```{r}
+word_ratios %>%
+  with(wordcloud(word, ut_n, max.words = 60))
+
+word_ratios %>%
+  with(wordcloud(word, ut_n, max.words = 60))
+```
+
+Let's look at the sentiment scores for both school. 
+```{r}
+ut_sentiment <- frequency %>% 
+  inner_join(get_sentiments("bing"))
+
+uw_sentiment <- frequency_uw %>% 
+  inner_join(get_sentiments("bing"))
+ut_sentiment
+uw_sentiment
+```
+Plots!
+```{r}
+ut_sentiment %>%
+  group_by(sentiment) %>%
+  top_n(14, ut_n) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, ut_n)) %>%
+  ggplot(aes(word, ut_n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(y = "Contribution to sentiment",
+       x = NULL) +
+  coord_flip()
+
+uw_sentiment %>%
+  group_by(sentiment) %>%
+  top_n(14, uw_n) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, uw_n)) %>%
+  ggplot(aes(word, uw_n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(y = "Contribution to sentiment",
+       x = NULL) +
+  coord_flip()
+```
+Note that fall is not negative in this context, so we can remove it from our data. 
+
+```{r}
+ut_sentiment <- ut_sentiment%>% filter(!word == "fall")
+uw_sentiment <- uw_sentiment%>% filter(!word == "fall")
+
+ut_sentiment %>%
+  group_by(sentiment) %>%
+  top_n(13, ut_n) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, ut_n)) %>%
+  ggplot(aes(word, ut_n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(y = "Contribution to sentiment",
+       x = NULL) +
+  coord_flip() + 
+  theme_dark()
+
+uw_sentiment %>%
+  group_by(sentiment) %>%
+  top_n(13, uw_n) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, uw_n)) %>%
+  ggplot(aes(word, uw_n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(y = "Contribution to sentiment",
+       x = NULL) +
+  coord_flip() + 
+  theme_solarized()
+
+```
