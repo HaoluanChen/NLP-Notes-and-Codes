@@ -1,0 +1,398 @@
+---
+title: "Chap 8-9 twitter case study"
+author: "Haoluan Chen"
+date: "9/30/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tm)
+library(dplyr)
+library(tidytext)
+library(ggplot2)
+library(ggthemes)
+library(tidyr)
+library(topicmodels)
+library(rtweet)
+library(wordcloud)
+library(widyr)
+library(igraph)
+library(ggraph)
+```
+
+For chapter 8 and 9, I am using the twitter data set I obtained from rtweet in chapter 7 to further investigation on the u of t twitter and university of waterloo twitter data. 
+
+```{r}
+# get data set
+uoft <- get_favorites(user = "UofT")
+uoft
+Uw <- get_favorites(user = "UWaterloo")
+Uw
+```
+## Some initial simple exploration from last chapter
+Total word count, word count and word frequence for U of T and UW
+```{r}
+tidy_tweets_ut <- uoft %>% 
+  select( "created_at", "text") %>% 
+  unnest_tokens(word, text, token = "words") %>% 
+  anti_join(stop_words) %>%
+  count(word, sort = TRUE) 
+
+tidy_tweets_ut
+tidy_tweets_ut %>% summarise(total = n()) # total words for ut
+
+frequency<- tidy_tweets_ut %>% 
+  mutate(freq = n/2972)
+
+frequency<- frequency %>% 
+  filter(!(word == "t.co" | word == "https"))
+
+
+tidy_tweets_uw <- Uw %>% 
+  select( "created_at", "text") %>% 
+  unnest_tokens(word, text, token = "words") %>% 
+  anti_join(stop_words) %>%
+  count(word, sort = TRUE) 
+
+tidy_tweets_uw %>% summarise(total = n())  # total words for uw
+frequency_uw<- tidy_tweets_uw %>% 
+  mutate(freq = n/3094)
+
+
+frequency_uw <- frequency_uw %>% 
+  filter(!(word == "t.co" | word == "https"))
+```
+
+Plot of the most frequent words:
+
+```{r}
+frequency %>% 
+  top_n(n) %>% 
+  mutate(word = reorder(word, freq)) %>%
+  ggplot(aes(word, freq)) +
+  geom_col( fill = ("red"), colour = "black") +
+  coord_flip() + 
+  theme_minimal()
+
+frequency_uw %>% 
+  top_n(n) %>% 
+  mutate(word = reorder(word, freq)) %>%
+  ggplot(aes(word, freq)) +
+  geom_col( fill = ("#00abff"), colour = "black") +
+  coord_flip() + 
+  theme_minimal()+
+  labs(title ="Waterloo")
+```
+##  Word co-ocurrences and correlations
+```{r}
+uoftpairs <- uoft %>% 
+  select( "created_at", "text") %>% 
+  unnest_tokens(word, text, token = "words") %>% 
+  anti_join(stop_words) %>% 
+  filter(!(word == "t.co" | word == "https" | word == "amp"))
+
+  
+ut_word_pairs <- uoftpairs %>% 
+  pairwise_count(word, created_at, sort = TRUE, upper = FALSE)
+ut_word_pairs
+
+uwpairs <- Uw %>% 
+  select( "created_at", "text") %>% 
+  unnest_tokens(word, text, token = "words") %>% 
+  anti_join(stop_words) %>% 
+  filter(!(word == "t.co" | word == "https"| word == "amp"))
+
+uw_word_pairs <- uwpairs %>% 
+  pairwise_count(word, created_at, sort = TRUE, upper = FALSE)
+uw_word_pairs
+
+```
+These are the pairs of words that occur together most often in U of T and UW's tweets. 
+
+Now, we can plot a network of these co-occuring words so we can see the relationships between each word.
+
+```{r}
+set.seed(1234)
+ut_word_pairs %>%
+  filter(n >= 10) %>%
+  graph_from_data_frame() %>%
+  ggraph(layout = "fr") +
+  geom_edge_link(aes(edge_alpha = n, edge_width = n), edge_colour = "cyan4") +
+  geom_node_point(size = 3) +
+  geom_node_text(aes(label = name), repel = TRUE, 
+                 point.padding = unit(0.2, "lines")) +
+  theme_void()
+
+
+uw_word_pairs %>%
+  filter(n >= 10) %>%
+  graph_from_data_frame() %>%
+  ggraph(layout = "fr") +
+  geom_edge_link(aes(edge_alpha = n, edge_width = n), edge_colour = "cyan4") +
+  geom_node_point(size = 3) +
+  geom_node_text(aes(label = name), repel = TRUE, 
+                 point.padding = unit(0.2, "lines")) +
+  theme_void()
+```
+By looking at the network, I found that both schools talks a lot about their students. The data set tends to organized into only one family of words that go together with students.
+
+## 8.3 Calculating tf-idf for twitter data
+```{r}
+
+ut_tf_idf <- uoft %>% 
+  select( "created_at", "text") %>% 
+  unnest_tokens(word, text, token = "words") %>% 
+  anti_join(stop_words) %>%
+  filter(!(word == "t.co" | word == "https" | word == "amp")) %>% 
+  count(word, sort = TRUE) %>% 
+  mutate(id = "ut")
+ut_tf_idf
+
+uw_tf_idf <- Uw %>% 
+  select( "created_at", "text") %>% 
+  unnest_tokens(word, text, token = "words") %>% 
+  anti_join(stop_words) %>%
+  filter(!(word == "t.co" | word == "https" | word == "amp")) %>% 
+  count(word, sort = TRUE) %>% 
+  mutate(id = "uw")
+uw_tf_idf
+
+data_tf_idf <- rbind(ut_tf_idf, uw_tf_idf)
+data_tf_idf<- data_tf_idf %>% 
+   ungroup() %>%
+  bind_tf_idf(word, id, n) %>% 
+  arrange(desc(tf_idf))
+data_tf_idf
+
+data_tf_idf %>%
+  mutate(word = factor(word, levels = rev(unique(word)))) %>% 
+  group_by(id) %>% 
+  top_n(15) %>% 
+  ungroup() %>%
+  ggplot(aes(word, tf_idf, fill = id)) +
+  geom_col(show.legend = FALSE) +
+  labs(x = NULL, y = "tf-idf") +
+  facet_wrap(~id, ncol = 2, scales = "free") +
+  coord_flip()+
+  theme_minimal()
+```
+Note: My idf value looks very strange.. 
+In our case, TF_idf did not give us some new aspect of the twitter data. 
+
+## Topic modeling
+To perform topic modeling, we will have to cast our tidy data into document-term matrix. 
+```{r}
+tidy_data  <- rbind(ut_tf_idf, uw_tf_idf)
+
+tidy_data
+twitter_dtm <- tidy_data %>% 
+  cast_dfm(id, word, n)
+twitter_dtm
+```
+The DTM has 41.7% sparse, this means that the matrix has only 41.7% of non-zero entry. Many words appears in both twitter account
+
+Let's create an LDA model. How should we choose K? I will try out different k value to see the differents in result.
+
+```{r}
+twitter_lda <- LDA(twitter_dtm, k = 10, control = list(seed = 1234))
+twitter_lda
+
+tidy_lda <- tidy(twitter_lda)
+tidy_lda
+```
+
+Looking at the top 10 terms for each topic
+```{r}
+top_terms <- tidy_lda %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+top_terms
+```
+
+plot the top 10 terms for each topic to get a visual view
+```{r fig.height=10}
+top_terms %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  group_by(topic, term) %>%    
+  arrange(desc(beta)) %>%  
+  ungroup() %>%
+  ggplot(aes(term, beta, fill = as.factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  coord_flip() +
+  scale_x_reordered() +
+  labs(title = "Top 10 terms in each LDA topic",
+       x = NULL, y = expression(beta)) +
+  facet_wrap(~ topic, ncol = 4, scales = "free")
+```
+
+Trying 15 topics
+```{r fig.height= 10}
+twitter_lda <- LDA(twitter_dtm, k = 15, control = list(seed = 1234))
+tidy_lda <- tidy(twitter_lda)
+top_terms <- tidy_lda %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+top_terms %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  group_by(topic, term) %>%    
+  arrange(desc(beta)) %>%  
+  ungroup() %>%
+  ggplot(aes(term, beta, fill = as.factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  coord_flip() +
+  scale_x_reordered() +
+  labs(title = "Top 10 terms in each LDA topic",
+       x = NULL, y = expression(beta)) +
+  facet_wrap(~ topic, ncol = 4, scales = "free")
+```
+We see that topics 12 and 1 contains a many same words(indicating too many topics?)
+Lets try 6 topics
+```{r fig.height= 10}
+twitter_lda <- LDA(twitter_dtm, k = 6, control = list(seed = 1234))
+tidy_lda <- tidy(twitter_lda)
+top_terms <- tidy_lda %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+top_terms %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  group_by(topic, term) %>%    
+  arrange(desc(beta)) %>%  
+  ungroup() %>%
+  ggplot(aes(term, beta, fill = as.factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  coord_flip() +
+  scale_x_reordered() +
+  labs(title = "Top 10 terms in each LDA topic",
+       x = NULL, y = expression(beta)) +
+  facet_wrap(~ topic, ncol = 4, scales = "free")
+
+```
+
+
+
+Looking at each tweet as a document (just testing)
+```{r}
+tidy_tweets_ut2 <- uoft %>% 
+  select( "created_at", "text") %>% 
+  unnest_tokens(word, text, token = "words") %>% 
+  anti_join(stop_words)%>%
+  filter(!(word == "t.co" | word == "https" | word == "amp"))
+tidy_tweets_ut2<- tidy_tweets_ut2 %>% count(word,created_at, sort = TRUE)
+
+tidy_tweets_uw2 <- Uw %>% 
+  select( "created_at", "text") %>% 
+  unnest_tokens(word, text, token = "words") %>% 
+  anti_join(stop_words)%>%
+  filter(!(word == "t.co" | word == "https" | word == "amp"))
+tidy_tweets_uw2<- tidy_tweets_uw2 %>% count(word, created_at, sort = TRUE)
+
+tidy_tweets_ut2
+tidy_tweets_uw2
+tidy_tweets <- rbind(tidy_tweets_ut2,tidy_tweets_uw2 )
+tidy_tweets
+
+twitter_dtm <- tidy_tweets %>% 
+  cast_dfm(created_at, word, n)
+twitter_dtm
+
+twitter_lda <- LDA(twitter_dtm, k = 6, control = list(seed = 1234))
+tidy_lda <- tidy(twitter_lda)
+top_terms <- tidy_lda %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+top_terms %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  group_by(topic, term) %>%    
+  arrange(desc(beta)) %>%  
+  ungroup() %>%
+  ggplot(aes(term, beta, fill = as.factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  coord_flip() +
+  scale_x_reordered() +
+  labs(title = "Top 10 terms in each LDA topic",
+       x = NULL, y = expression(beta)) +
+  facet_wrap(~ topic, ncol = 4, scales = "free")
+```
+
+
+## More on Sentiment analysis
+This time, I will be using sentiments from afinn package
+```{r}
+frequency <- frequency %>% 
+  inner_join(get_sentiments("afinn"), by = "word")
+
+frequency_uw <- frequency_uw %>% 
+  inner_join(get_sentiments("afinn"), by = "word")
+
+frequency %>%
+  mutate(word = reorder(word, value)) %>%
+  filter(value >= 4|value < -2) %>% 
+  ggplot(aes(word, value, fill = value > 0)) +
+  geom_col(show.legend = FALSE) +
+  coord_flip() +
+  ylab("Average sentiment value")
+```
+This plot shows the large absulute average AFINN value for the words in u of t data set
+
+Let's check for waterloo
+
+```{r}
+frequency_uw %>%
+  mutate(word = reorder(word, value)) %>%
+  filter(value >= 4|value < -2) %>% 
+  ggplot(aes(word, value, fill = value > 0)) +
+  geom_col(show.legend = FALSE) +
+  coord_flip() +
+  ylab("Average sentiment value")
+```
+There is more words with higher average sentiment value in waterloo's twitter.
+
+
+## N-gram analysis
+We should consider the effect of words such as "not" and "no" on sentiment analysis. These words leads to passages/words incorrectly being labeled as positive. Let's check for these negation words in our twitter data set.
+
+```{r}
+ut_bigram <- uoft %>% 
+  select( "created_at", "text") %>% 
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) 
+ut_bigram
+
+ut_bigram_count <- ut_bigram %>% 
+  count(bigram, sort = TRUE) %>% 
+    separate(bigram, c("word1", "word2"), sep = " ")
+ut_bigram_count
+
+negate_words <- c("not", "without", "no", "can't", "don't", "won't")
+
+ut_bigram_count %>%
+  filter(word1 %in% negate_words) %>%
+  count(word1, word2, wt = n, sort = TRUE) %>%
+  inner_join(get_sentiments("afinn"), by = c(word2 = "word")) %>%
+  mutate(contribution = value * n) %>%
+  group_by(word1) %>%
+  top_n(10, abs(contribution)) %>%
+  ungroup() %>%
+  mutate(word2 = reorder(paste(word2, word1, sep = "__"), contribution)) %>%
+  ggplot(aes(word2, contribution, fill = contribution > 0)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ word1, scales = "free", nrow = 3) +
+  scale_x_discrete(labels = function(x) gsub("__.+$", "", x)) +
+  xlab("Words preceded by a negation") +
+  ylab("Sentiment value * # of occurrences") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  coord_flip()
+```
+Since our data set is small, and negations was not used very often in u of t tweets. So there's only a small affect on the sentiment value. However, in other cases, these negations may play an important role in sentiment analysis (incorrectly classify negative sentiment). 
+
+## Summary and reflection of the book
+From this book, I learned to apply many text mining techniques under the tidy text format. The tidy text data structure/ecosystem makes these text mining tasks easier, more effective and consistent. It also allows us to manipulate, summarize and visualize our data set and our model result. When we first obtain the data, we may use unnest_tokens() to turn it into the tidy text format to do further investigation. We can choose to perform sentiment analysis, tf-idf analysis, n-gram analysis. With the data in tidy text format, we can also turn it into other data structure such as document-term matrix for other types of analysis (topic modeling). However, keep in mind that there are limitations of each model/types of analysis. For example, in sentiment analysis, there are several sentiment lexicons that is based on different data. We need to use the appropriate lexicon when performing sentiment analysis. Also, we should aware that the topic modeling may incorrectly assigned words to each topic. 

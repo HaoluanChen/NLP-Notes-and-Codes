@@ -810,28 +810,28 @@ tidy(mallet_model)</code></pre>
 <pre><code>## # A tibble: 1,444 x 3
 ##    topic term             beta
 ##    &lt;int&gt; &lt;chr&gt;           &lt;dbl&gt;
-##  1     1 some       0.000987  
-##  2     2 some       0.0000103 
-##  3     1 provinces  0.00196   
-##  4     2 provinces  0.00104   
-##  5     1 are        0.00490   
-##  6     2 are        0.0164    
-##  7     1 scrambling 0.00000977
-##  8     2 scrambling 0.00104   
-##  9     1 to         0.0323    
-## 10     2 to         0.0277    
+##  1     1 some       0.00103   
+##  2     2 some       0.00000985
+##  3     1 provinces  0.00205   
+##  4     2 provinces  0.000995  
+##  5     1 are        0.00612   
+##  6     2 are        0.0148    
+##  7     1 scrambling 0.0000102 
+##  8     2 scrambling 0.000995  
+##  9     1 to         0.0346    
+## 10     2 to         0.0256    
 ## # ... with 1,434 more rows</code></pre>
 <pre class="r"><code># document-topic pairs
 tidy(mallet_model, matrix = &quot;gamma&quot;)</code></pre>
 <pre><code>## # A tibble: 6 x 3
 ##   document topic gamma
 ##   &lt;chr&gt;    &lt;int&gt; &lt;dbl&gt;
-## 1 1            1 0.510
-## 2 2            1 0.467
-## 3 3            1 0.520
-## 4 1            2 0.490
-## 5 2            2 0.533
-## 6 3            2 0.480</code></pre>
+## 1 1            1 0.486
+## 2 2            1 0.480
+## 3 3            1 0.497
+## 4 1            2 0.514
+## 5 2            2 0.520
+## 6 3            2 0.503</code></pre>
 <p>Then we could use ggplot2 to explore and visualize the model in the same way we did the LDA output.</p>
 </div>
 <div id="summary-1" class="section level2">
