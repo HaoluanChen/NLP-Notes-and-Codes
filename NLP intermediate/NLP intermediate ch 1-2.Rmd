@@ -1,0 +1,228 @@
+---
+title: "NLP intermediate ch 1-2"
+author: "Haoluan Chen"
+date: "10/20/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tokenizers)
+library(tidyverse)
+library(tidytext)
+library(hcandersenr)
+library(tokenizers)
+```
+
+## Chapter 1 Language and modeling
+
+### 1.1 Linguistics for text analysis
+Some definition in linguistics:
+
+Linguistics sub-field | What does it focus on?
+------------- | -------------
+Phonetics	| Sounds that people use in language
+Phonology	| Systems of sounds in particular languages
+Morphology	| How words are formed
+Syntax |	How sentences are formed from words
+Semantics | What sentences mean
+Pragmatics |	How language is used in context
+
+"When we build supervised machine learning models for text data, we use these levels of organization to create natural language features, i.e., predictors or inputs for our models. These features often depend on the morphological characteristics of language, such as when text is broken into sequences of characters for a recurrent neural network deep learning model. Sometimes these features depend on the syntactic characteristics of language, such as when models use part-of-speech information."
+
+### 1.2 A glimpse into one area: morphology
+Morphology is the study of word's internal structures and how they are formed. It focuses on how morphemes such as prefixes, suffixes and root words come together to form words. This characteristics of a text dataset are deeply connected to pre-processing steps in NLP, such as tokenization, removing stop words and stemming. These pre-processing stops for creating features can have significant effects on the NLP model. 
+
+### 1.3 Different languages
+Note that the models we build are typically language-specific (English), which means we are not able to generalize our model in other languages. Be aware of the limitations of the current state of NLP field.
+
+### 1.4 Other ways text can vary
+The language from a specific dialect often cannot be handle well with a model trained on data from the same language but not inclusive of that dialect. This is a problem because the model is less accurate then it should be, and it also amplifies harm against minority groups
+Also, language will change over time, which may impact the modeling process. If we have two model, one trained with tweets and one trained with legal documents. Then the first model would perform poorly if applied to the dataset of legal documents. Machine learning in general, are sensitive to the data used for training, especially with text modeling. Therefore, AI products such as sentiment analysis APIs only work well when the text you need to predict from is a good match to the text such a product was trained on.
+
+## Chapter 2 Tokenization
+
+### 2.1 What is a token?
+In R, text is typically represented with the character data type.
+The book used "The fir tree" data from the hcandersenr package, I will use "The tinder-box" in the hcandersenr package.
+```{r}
+
+the_tinder_box <-  hcandersen_en %>%
+  filter(book == "The tinder-box") %>%
+  pull(text)
+
+head(the_tinder_box, 7)
+```
+
+The first seven lines stores the first paragraph of the story, each line consisting of a series of character symbols. Identifying these kinds of boundaries between words is where the process of tokenization comes in.
+
+In tokenization, we take an input string and a token type and split the input into tokens. 
+We can use the tokenizers library to split the data.
+
+```{r}
+tokenize_words(the_tinder_box[1:2])
+```
+
+### 2.2 Types of tokens
+We can generalize the idea of token beyond single word to other text unit, such as characters, sentences, lines, paragraphs and n-grams.
+
+ 
+```{r}
+sample_vector <- c(
+  "Far down in the forest",
+  "grew a pretty little fir-tree"
+)
+sample_tibble <- tibble(text = sample_vector)
+tokenize_words(sample_vector)
+sample_tibble %>%
+  unnest_tokens(word, text, token = "words")
+```
+Note that the tokenize_words() method wil yield the same result as using unnest_tokens() in tidytext library.
+
+### 2.2.1 Character tokens
+tokenize_characters() will split the text into characters. This function also has arguments to convert to lowercase and to strip all non-alphanumeric characters. 
+```{r}
+tft_token_characters <- tokenize_characters(
+  x = the_tinder_box,
+  lowercase = TRUE,
+  strip_non_alphanum = TRUE,
+  simplify = FALSE
+)
+head(tft_token_characters) %>%
+  glimpse()
+```
+Sometimes you run into problems where what a “character” is can be ambiguous. Some data may contain ligatures. Ligatures are when multiple graphemes or letters are combined as a single glyph, which is what we have called a character so far. For example:
+```{r}
+tokenize_characters("ﬂowers")
+```
+We might want to have these ligatures separated back into separate characters, but we need to consider if the presence of ligatures is a meaningful feature to the question we are trying to answer.
+Newcomers in terms of characters are emojis. While they do look whimsical, various tricks have been used to more effectively store them in Unicode. (code missing in the book?)
+
+### 2.2.2 Word tokens
+Tokenizing at the word level is perhaps the most common and widely used tokenization. 
+```{r}
+tft_token_words <- tokenize_words(
+  x = the_tinder_box,
+  lowercase = TRUE,
+  stopwords = NULL,
+  strip_punct = TRUE,
+  strip_numeric = FALSE
+)
+head(tft_token_words) %>%
+  glimpse()
+```
+The results show us the input text split into individual words. 
+
+Using unnest_tokens() will allow us to use dplyr to find the most commonly used words in the book
+```{r}
+hcandersen_en %>%
+  filter(book %in% c("The fir tree", "The little mermaid")) %>%
+  unnest_tokens(word, text) %>%
+  count(book, word) %>%
+  group_by(book) %>%
+  arrange(desc(n)) %>%
+  slice(1:5)
+```
+
+Here is the top 5 most common words in the two fairy tale. Note that we have not remove stop words in the data.
+
+### 2.2.3 Tokenizing by n-grams
+N-gram is a term in linguistic for a contiguous sequence of n items from a given sequence of text or speech. The tem can be phonemes, syllables, letters, or words depending on the application.
+The benefit of using n-grams compared to words is that n-grams capture word order which would otherwise be lost.
+
+We can use tokenize_ngrams() to split the text into n-grams.
+```{r}
+tft_token_ngram <- tokenize_ngrams(
+  x = the_tinder_box,
+  lowercase = TRUE,
+  n = 3L,
+  n_min = 3L,
+  stopwords = character(),
+  ngram_delim = " ",
+  simplify = FALSE
+)
+```
+
+In the method parameter, the n determine which degree of n-gram to return. Using n = 1 returns unigrams, n = 2 bigrams, n = 3 gives trigrams, and so on. n_min pecifies the minimum number of n-grams to include. By default both n and n_min are set to 3 making tokenize_ngrams() return only trigrams.By setting n = 3 and n_min = 1, we will get all unigrams, bigrams, and trigrams of a text. Lastly, we have the ngram_delim argument, which specifies the separator between words in the n-grams; notice that this defaults to a space.
+
+Looking at the n-gram result for the first line of our data.
+```{r}
+tft_token_ngram[[1]]
+```
+
+Using unigrams is faster and more efficient, but we don’t capture information about word order. Using a higher value for n keeps more information, but the vector space of tokens increases dramatically, corresponding to a reduction in token counts. (Using longer n-grams results in a higher number of unique tokens with fewer counts)
+
+We can also combine unigrams and bigrams in an analysis or model. This allows us to  extract different levels of detail from text data. Bigram tells how often words co-appear with other and unigrams tell you which individual words have been used a lot of times
+
+### 2.2.4 Lines, sentence, and paragraph tokens
+Tokenizers to split text into larger units of text like lines, sentences, and paragraphs are rarely used directly for modeling purposes, as the tokens produced tend to be fairly unique. It is very uncommon for multiple sentences in a text to be identical.
+
+we can combine the data in the the_tinder_box data set, and perform sentence splitting
+```{r}
+the_tinder_box_sentences <- the_tinder_box %>%
+  paste(collapse = " ") %>%
+  tokenize_sentences()
+head(the_tinder_box_sentences[[1]])
+```
+Now that we have turned the text into “one sentence per element”, we can analyze on the sentence level.
+
+### 2.3 Where does tokenization break down?
+Tokenization will generally be one of the first steps when building a model or any kind of text analysis, so it is important to consider carefully what happens in this step of data preprocessing. 
+For example with the sentence “Don’t forget you owe the bank $1 million for the house.” The "\$1" is a important part of the sentence because it means a kind of currency. However, when we use tokenize_words with defult parameters, we will get result below.
+```{r}
+tokenize_words("$1")
+```
+Note that the $ is removed from the tokeniztion. 
+
+```{r}
+tokenize_words("$1", strip_punct = FALSE)
+```
+We could set the strip_punct = FALSE to no strip the punctuation in the data. 
+
+Information lost to tokenization (especially default tokenization) occurs more frequently in online and more casual text.
+
+"Multiple spaces, extreme use of exclamation characters, and deliberate use of capitalization can be completely lost depending on our choice of tokenizer and tokenization parameters. At the same time, it is not always worth keeping that kind of information about how text is being used. If we are studying trends in disease epidemics using Twitter data, the style the tweets are written with is likely not nearly as important as what words are used. However, if we are trying to model social groupings, language style and how individuals use language toward each other becomes much more important."
+
+Also, The choice of tokenization results in a different pool of possible tokens, and can influence performance. 
+
+### 2.4 Building your own tokenizer
+There are two main approaches to tokenization.
+
+1. Split the string up according to some rule.
+2. Extract tokens based on some rule.
+
+### 2.4.1 Tokenize to characters, only keeping letters
+```{r}
+str_extract_all(
+  "This sentence include 2 numbers and 1 period.",
+  "[:alpha:]{1}")
+
+str_extract_all(
+  "This sentence include 2 numbers and 1 period.",
+  "[a-zA-Z]{1}")
+```
+For [a-zA-Z]{1} option would run faster, but we would lose non-English letter characters.
+
+### 2.4.2 Allow for hyphenated words
+```{r}
+str_split("This isn't a sentence with hyphenated-words.", "[:space:]")
+str_extract_all("This isn't a sentence with hyphenated-words.", "[:alpha:]+-[:alpha:]+")
+```
+We can regex to split and extract specific words we want using above methods
+
+### 2.5 Tokenization for non-Latin alphabets 
+There are R-packages for other languages, such as jiebaR package for chinese tokenization. 
+```{r}
+library(jiebaR)
+words <- c("下面是不分行输出的结果", "下面是不输出的结果")
+
+engine1 <- worker(bylines = TRUE)
+
+segment(words, engine1)
+```
+### 2.6 Tokenization benchmark
+There are other R-packages for tokenization. They are deisnged to serve different purposes. Some packages allows you to customize the tokenizer for greater flexibility, but it may cause slower performance. 
+
+### Chapter 1-2 summary and reflection
+In chapter 1, I learn a lot more about linguistics, and I realized that it is important to have some understanding of linguistics because it can help build and improve NLP models' accuracy. However, languages are difficult to understand and change over time. People use different languages such as slang and emoji on Twitter, and we use formal text in the professional setting. Since text reflects the characteristics of their training data, so differences in language over time, between dialects and various cultural contexts can prevent a model trained on one data set from being appropriate for application in another. In addition, text modeling literature focuses more on English, but English is not a dominant language around the world. This reminded me of NLP applications' exposure problem mentioned in the paper *The Social Impact of Natural Language Processing*, which is caused by the biases toward a particular demographic group's language. The book also mentioned how different language can be modeled differently based on the language's characteristics. Furthermore, it introduced a package in tokenizing Chinese text, which I really want to look into.\
+For chapter 2, this book has a much more detailed explanation and limitation of tokenization packages. I realized that tokenization is an important step of NLP models and different tokenization can impact the model result and accuracy. Furthermore, the book showed us how to make our own tokenizer in R for different model purposes. 
