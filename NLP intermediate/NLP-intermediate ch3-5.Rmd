@@ -260,7 +260,7 @@ slide_windows <- function(tbl, window_size) {
 }
 ```
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 complaints <- read_csv("complaints.csv")
 tidy_complaints <- complaints %>%
   select(`Complaint ID`, `Consumer complaint narrative`) %>%
@@ -359,4 +359,10 @@ Building your own vectors is likely to be a good option when the text domain you
 NLP researchers have also proposed methods for debiasing embeddings. For example choosing specific sets of words that are re-projected in the vector space so that some bias is mitigated. However, some researcher showed that bias may still exists after applying current debiasing methods. 
 
 ## Summary and Reflection
+Through chapters 3-5, I learned three pre-processing techniques for text data: removing stop word, stemming, and word embedding. These are essential steps before we perform statistical modeling. 
 
+In chapter 3, I learned that removing stop words removes the words that carry little or no meaningful information and reduces the computational time for text mining. It can also be considered as a dimensionality reduction of text data. The book also shows how to create a stop words list with my data set. we can review and select the top most frequent words on a case-by-case basis. 
+
+Chapter 4 talks about stemming techniques, combining the words with the same base word (stem). Stemming reduces the sparsity of text data, which can help training models, but at the cost of throwing information away. Lemmatization is another way to normalize words to a root, based on language structure and how words are used in their context.
+
+Lastly, to build machine learning models, we must turn our text data into features. Chapter 5 demonstrates how to map words to an embedding in a special vector space, which opens a bigger world of natural language processing. We can now use these word embedding vectors to fit machine learning models to do inference and prediction. However, we should always keep in mind that there is bias in our word embedding that could be amplified through our modeling process. We should always assess the bias in our word embedding to reduce bias in our NLP application.

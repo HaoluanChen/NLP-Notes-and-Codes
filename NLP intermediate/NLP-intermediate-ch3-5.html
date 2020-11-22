@@ -459,7 +459,7 @@ tidy_fir_tree %&gt;%
 <div id="creating-your-own-stop-words-list" class="section level2">
 <h2>3.2 Creating your own stop words list</h2>
 <p>One way to create our own stop words list is to find the most frequent words in a large text data and go over select the top most frequent words. Select the number of words to remove is best done by a case-by-case basis. We can start with a lower number like twenty and increase by ten words until you get to words that are not appropriate as stop wrods for your analytical purpose.</p>
-<p>This list mat not be perfect. Depending on how text was generated or processed, some words may be added to stop word list due to encoding, and optical character recognition errors. Further, these result may be biased because they are based on the corpus of documents we have aviable.</p>
+<p>This list may not be perfect. Depending on how text was generated or processed, some words may be added to stop word list due to encoding, and optical character recognition errors. Further, these result may be biased because they are based on the corpus of documents we have aviable.</p>
 <p>Note: This bias can be minimized by removing words we would expect to be over-represented or to add words we expect to be under-represented.</p>
 <p>By using a single threshold to create a stop word list, you would likely only include one form of words like he-she, his-her, man-woman.</p>
 <p>We can also calculate the IDF from a big text data. Then look the words with lowest IDF, and select the stop words.</p>
@@ -648,8 +648,15 @@ tidy_fir_tree %&gt;%
 ## 1 tree     89</code></pre>
 <p>Now, we have put all the related words together and identified them with the same stem.</p>
 </div>
-<div id="compare-some-stemming-options" class="section level2">
-<h2>4.5 Compare some stemming options</h2>
+<div id="lemmatization-and-stemming" class="section level2">
+<h2>4.6 Lemmatization and stemming</h2>
+<p>Stemming is typically implemented in NLP as rule-based, operating on the word by itself. Lemmatization is another way to normalizing words to have a root. Lemmatization uses knowledge about a language’s structure to reduce words down to their lemmas. the canonical or dictionary form of words. It is typically implemented in NLP as linguistics-based, operating on the word in its context.</p>
+<p>A modern, efficient implementation for lemmatization is available in the excellent spacy library</p>
+<p>Implementing lemmatization is slower and more complex than stemming. Just like with stemming, lemmatization often improves the true positive rate (or recall) but at the expense of the true negative rate (or precision) compared to not using lemmatization, but typically less so than stemming.</p>
+</div>
+<div id="stemming-and-stop-words" class="section level2">
+<h2>4.7 Stemming and stop words</h2>
+<p>Stop word lists are usually unstemmed, so you need to remove stop words before stemming text data.</p>
 </div>
 <div id="chapter-5-word-embeddings" class="section level2">
 <h2>Chapter 5 Word Embeddings</h2>
@@ -686,53 +693,6 @@ tidy_fir_tree %&gt;%
     compact() %&gt;%
     bind_rows()
 }</code></pre>
-<pre class="r"><code>complaints &lt;- read_csv(&quot;complaints.csv&quot;)</code></pre>
-<pre><code>## Parsed with column specification:
-## cols(
-##   `Date received` = col_date(format = &quot;&quot;),
-##   Product = col_character(),
-##   `Sub-product` = col_character(),
-##   Issue = col_character(),
-##   `Sub-issue` = col_character(),
-##   `Consumer complaint narrative` = col_character(),
-##   `Company public response` = col_character(),
-##   Company = col_character(),
-##   State = col_character(),
-##   `ZIP code` = col_character(),
-##   Tags = col_character(),
-##   `Consumer consent provided?` = col_character(),
-##   `Submitted via` = col_character(),
-##   `Date sent to company` = col_date(format = &quot;&quot;),
-##   `Company response to consumer` = col_character(),
-##   `Timely response?` = col_character(),
-##   `Consumer disputed?` = col_character(),
-##   `Complaint ID` = col_double()
-## )</code></pre>
-<pre class="r"><code>tidy_complaints &lt;- complaints %&gt;%
-  select(`Complaint ID`, `Consumer complaint narrative`) %&gt;%
-  unnest_tokens(word, `Consumer complaint narrative`) %&gt;%
-  add_count(word) %&gt;%
-  filter(n &gt;= 50) %&gt;%
-  select(-n)
-
-nested_words &lt;- tidy_complaints %&gt;%
-  nest(words = c(word))
-
-nested_words</code></pre>
-<pre><code>## # A tibble: 1,839,561 x 2
-##    `Complaint ID` words             
-##             &lt;dbl&gt; &lt;list&gt;            
-##  1        3384392 &lt;tibble [18 x 1]&gt; 
-##  2        3379500 &lt;tibble [1 x 1]&gt;  
-##  3        3433198 &lt;tibble [77 x 1]&gt; 
-##  4        3374555 &lt;tibble [128 x 1]&gt;
-##  5        3915909 &lt;tibble [1 x 1]&gt;  
-##  6        3944695 &lt;tibble [1 x 1]&gt;  
-##  7        3938785 &lt;tibble [1 x 1]&gt;  
-##  8        3943009 &lt;tibble [1 x 1]&gt;  
-##  9        3319331 &lt;tibble [177 x 1]&gt;
-## 10        3299394 &lt;tibble [442 x 1]&gt;
-## # ... with 1,839,551 more rows</code></pre>
 <p>I am not sure why the code in the text book does not work even when I copy and pasted them… I will move on to pre-trained word embeddings</p>
 </div>
 <div id="use-pre-trained-word-embeddings" class="section level2">
@@ -847,9 +807,20 @@ tidy_glove %&gt;%
 <li>Women’s first names are more associated with family and men’s first names are more associated with career.</li>
 <li>Terms associated with women are more associated with the arts and terms associated with men are more associated with science.</li>
 </ul>
-<p>When embeddings with these kinds of stereotypes are used as a pre-processing step in training a predictive model, the final model can exhibit racist, sexist, or otherwise biased characteristics. ## 5.5 Using word embeddings in the real world Depending on the particular analytical question you are trying to answer, another numerical representation of text data (such as word frequencies or tf-idf of single words or n-grams) may be more appropriate.</p>
+<p>When embeddings with these kinds of stereotypes are used as a pre-processing step in training a predictive model, the final model can exhibit racist, sexist, or otherwise biased characteristics.</p>
+</div>
+<div id="using-word-embeddings-in-the-real-world" class="section level2">
+<h2>5.5 Using word embeddings in the real world</h2>
+<p>Depending on the particular analytical question you are trying to answer, another numerical representation of text data (such as word frequencies or tf-idf of single words or n-grams) may be more appropriate.</p>
 <p>Building your own vectors is likely to be a good option when the text domain you are working in is specific rather than general purpose; some examples of such domains could include customer feedback for a clothing e-commerce site, comments posted on a coding Q&amp;A site, or legal documents. However, learning good quality word embeddigns is only realistic when you have large corpus of text data.</p>
 <p>NLP researchers have also proposed methods for debiasing embeddings. For example choosing specific sets of words that are re-projected in the vector space so that some bias is mitigated. However, some researcher showed that bias may still exists after applying current debiasing methods.</p>
+</div>
+<div id="summary-and-reflection" class="section level2">
+<h2>Summary and Reflection</h2>
+<p>Through chapters 3-5, I learned three pre-processing techniques for text data: removing stop word, stemming, and word embedding. These are essential steps before we perform statistical modeling.</p>
+<p>In chapter 3, I learned that removing stop words removes the words that carry little or no meaningful information and reduces the computational time for text mining. It can also be considered as a dimensionality reduction of text data. The book also shows how to create a stop words list with my data set. we can review and select the top most frequent words on a case-by-case basis.</p>
+<p>Chapter 4 talks about stemming techniques, combining the words with the same base word (stem). Stemming reduces the sparsity of text data, which can help training models, but at the cost of throwing information away. Lemmatization is another way to normalize words to a root, based on language structure and how words are used in their context.</p>
+<p>Lastly, to build machine learning models, we must turn our text data into features. Chapter 5 demonstrates how to map words to an embedding in a special vector space, which opens a bigger world of natural language processing. We can now use these word embedding vectors to fit machine learning models to do inference and prediction. However, we should always keep in mind that there is bias in our word embedding that could be amplified through our modeling process. We should always assess the bias in our word embedding to reduce bias in our NLP application.</p>
 </div>
 
 
