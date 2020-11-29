@@ -1,0 +1,587 @@
+---
+title: "NLP-intermediate ch 6-7"
+author: "Haoluan Chen"
+date: "11/19/2020"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+library(textrecipes)
+library(tidymodels)
+library(tidytext)
+library(stringr)
+library(discrim)
+library(readr)
+```
+
+
+Since our data is too large, it takes too long to run the code. And when I reduce the data, the accuracy decrease significally. So, I only writing notes and code tamplate for chapter 6-7
+
+## Chapter 6 Regression
+
+Goal of this chapter:  build a model to predict which court opinions were written in which years.
+
+Since we are predicting a numeric/continuous value, we use a regression model. 
+
+In text modeling, we use text data (such as the text of the court opinions), sometimes combined with other structured, non-text data, to predict the continuous value of interest (such as year of the court opinion).
+
+```{r}
+
+#library(scotus)
+
+#scotus_filtered %>%
+#  as_tibble()
+```
+The library scotus that contains the data in the book are not availiable for R version 3.6.1. 
+
+## 6.1 A first regression model
+Our first step in building a model is to split our data into training and testing sets. We use functions from tidymodels for this; we use initial_split() to set up how to split the data, and then we use the functions training() and testing() to create the datasets we need.
+
+Next, we preprocess our data to get it ready for modeling using a recipe. 
+
+* First, we must specify in our initial recipe() statement the form of our model.
+* Then, we tokenize (Chapter 2) the text
+* Next, we filter to only keep the top 1000 tokens by term frequency. We filter out those less frequent words because we expect them to be too rare to be reliable
+* stop_tfidf() will calculate weights for each token frequency by the inverse document frequency
+* lastly, we normalize (center and scale) the tf-idf values. (We do this for Lasso regularization)
+
+```{r eval=FALSE, echo=T}
+scotus_rec <- recipe(year ~ text, data = scotus_train) %>%
+  step_tokenize(text) %>%
+  step_tokenfilter(text, max_tokens = 1e3) %>%
+  step_tfidf(text) %>%
+  step_normalize(all_predictors())
+
+scotus_wf <- workflow() %>%
+  add_recipe(scotus_rec)
+
+lasso_spec <- linear_reg(penalty = 0.1, mixture = 1) %>%
+  set_mode("regression") %>%
+  set_engine("glmnet")
+
+lasso_fit <- scotus_wf %>%
+  add_model(lasso_spec) %>%
+  fit(data = scotus_train)
+```
+
+Now, we access the fit using pull_workflow_fit(), and even tidy() the model coefficient results into a convenient dataframe format.
+
+```{r eval=FALSE, echo=T}
+lasso_fit %>%
+  pull_workflow_fit() %>%
+  tidy() %>%
+  arrange(-estimate)
+```
+
+## 6.1.2 Evaluation
+To evaluate our model, we can predict one time on the testing set to measure performance. 
+
+The purpose of the testing data is to estimate how your final model will perform on new data; we set aside a proportion of the data available and pretend that it is not available to us for training the model so we can use it to estimate model performance on strictly out-of-sample data. 
+
+Another option for evaluating models is to predict one time on the training set to measure performance. However, the results in performance are too optimistic and in risk of overfitting to the training set.
+
+Yet another option for evaluating or comparing models is to use a separate validation set. We split the data into three sets (testing, training, and validation). The validation set is used for computing performance metrics to compare models or model parameters. This can be a great option if you have enough data for it. 
+
+We can use resampling. When we resample, we create new simulated datasets from the training set for the purpose of, for example, measuring model performance.
+
+We can do this using resampled datasets built from the training set. For example, create cross 10-fold cross-validation sets, and use these resampled sets for performance estimates.
+
+```{r eval=FALSE, echo=T}
+set.seed(123)
+scotus_folds <- vfold_cv(scotus_train)
+
+scotus_folds
+```
+The default performance metrics to be computed for regression models are RMSE (root mean squared error) and $R^2$. (The lower RMSE is, the better; the closer $R^2$ is to one, the better.) 
+These values are quantitative estimates for how well our model performed, and can be compared across different kinds of models.
+
+## 6.2 Compare to the null model
+One way to assess a model like this one is to compare its performance to a “null model.”
+
+A null model is a simple, non-informative model that always predicts the largest class (for classification) or the mean for regression.
+
+## 6.3 Tuning lasso hyperparameters
+How do we know the right or best regularization parameter penalty?
+
+This is a model hyperparameter and we cannot learn its best value during model training, but we can estimate the best value by training many models on resampled data sets and exploring how well all these models perform.
+
+After the tuning process, we can select a single best numeric value.
+
+We can create a regular grid of values to try, using a convenience function for penalty(). The function grid_regular() is from the dials package. It chooses sensible values to try for a parameter like the regularization penalty
+
+```{r eval=FALSE, echo=T}
+lambda_grid <- grid_regular(penalty(), levels = 30)
+lambda_grid
+set.seed(2020)
+tune_rs <- tune_grid(
+  scotus_wf %>% add_model(tune_spec),
+  scotus_folds,
+  grid = lambda_grid,
+  control = control_resamples(save_pred = TRUE)
+)
+tune_rs
+```
+
+Now, instead of one set of metrics, we have a set of metrics for each value of the regularization penalty.
+```{r eval = FALSE, echo=T}
+tune_rs %>%
+  collect_metrics()
+```
+Above code will produces the values of the regularization penalty for all the metrics. We can further visualize how these metrics change as penalty change to select the best penalty. 
+
+We can view the best results with show_best() and a choice for the metric, such as RMSE.
+
+```{r eval = FALSE, echo=T}
+tune_rs %>%
+  show_best("rmse")
+
+tune_rs_rmse <- show_best(tune_rs, "rmse") %>%
+  pull(mean) %>%
+  min() %>%
+  round(1)
+
+lowest_rmse <- tune_rs %>%
+  select_best("rmse")
+
+lowest_rmse
+```
+Next, let’s finalize our tunable workflow with this particular regularization penalty. This is the regularization penalty that our tuning results indicate give us the best model.
+
+```{r eval = FALSE, echo=T}
+final_lasso <- finalize_workflow(
+  scotus_wf %>% add_model(tune_spec),
+  lowest_rmse
+)
+
+final_lasso
+```
+Now our workflow has finalized values for all arguments. The preprocessing recipe has been evaluated on the training data, and we tuned the regularization penalty
+
+## 6.4 Compare to a random forest model
+Random forest models are broadly used in predictive modeling contexts because they are low-maintenance and perform well. 
+```{r eval = FALSE, echo=T}
+rf_spec <- rand_forest(trees = 1000) %>% # model specification
+  set_engine("ranger") %>%
+  set_mode("regression")
+rf_rs <- fit_resamples(     #fit and evaluate the model using fit_resamples()
+  scotus_wf %>% add_model(rf_spec),
+  scotus_folds,
+  control = control_resamples(save_pred = TRUE) # A control argument to specify that we want to keep the predictions, to explore after fitting
+)
+collect_metrics(rf_rs) #to obtain and format the performance metrics for this random forest model
+```
+
+Then, we can plot our predictions to check on the behavior of our fitted model. 
+One of the defining characteristics of text data is that it is sparse, with many features but most features not occurring in most observations. Tree-based models such as random forests are often not well-suited to sparse data because of how decision trees model outcomes.
+
+Note: Models that work best with text tend to be models designed for or otherwise appropriate for sparse data. Also, Algorithms that work well with sparse data are less important when text has been transformed to a non-sparse representation such as with word embeddings
+
+## 6.5 Case study: sparse encoding
+We can change how our text data is represented to take advantage of this sparsity. For some computational engine, it can be more efficient when test data is transformed to a sparse matrix rather than a dense data frame.
+
+To keep our text data sparse in the sense of having many zero values, we need to create a slightly different preprocessing recipe.
+```{r eval = FALSE, echo=T}
+tfidf_rec <- recipe(year ~ text, data = scotus_train) %>%
+  step_tokenize(text) %>%
+  step_tokenfilter(text, max_tokens = 1e3) %>%
+  step_tfidf(text)
+```
+
+The difference is that we did not include a step to center and sclae the predictors with step_normalize(). 
+
+The next step to use the sparse capabilities of set_engine("glmnet") is to explicitly set a non-default preprocessing blueprint, using the package hardhat.
+```{r eval = FALSE, echo=T}
+library(hardhat)
+sparse_bp <- default_recipe_blueprint(composition = "dgCMatrix")
+```
+This “blueprint” lets us specify during modeling how we want our data passed around from the preprocessing into the model. The composition "dgCMatrix" is the most common sparse matrix type.
+
+We can use this blueprint argument when we add our recipe to our modeling workflow, to define how the data should be passed into the model.
+
+```{r eval = FALSE, echo=T}
+sparse_wf <- workflow() %>%
+  add_recipe(tfidf_rec, blueprint = sparse_bp) %>%
+  add_model(tune_spec)
+```
+Then, we can tune the model like we did before
+
+## 6.6 Case study: removing stop words
+Removing stop words is part of data preprocessing, so we define this step as part of our pre-processing recipe. 
+
+Here is a small recipe wrapper helper function so we can pass a value stopword_name to step_stopwords().
+```{r eval = FALSE, echo=T}
+stopword_rec <- function(stopword_name) {
+  recipe(year ~ text, data = scotus_train) %>%
+    step_tokenize(text) %>%
+    step_stopwords(text, stopword_source = stopword_name) %>%
+    step_tokenfilter(text, max_tokens = 1e3) %>%
+    step_tfidf(text)
+}
+stopword_rec("snowball")
+```
+Here we used snowball stop words list by calling this function
+Then we can fit and tune the model like we did before.
+
+```{r eval = FALSE, echo=T}
+tunable_wf <- workflow() %>%
+  add_model(tune_spec)
+
+set.seed(123)
+snowball_rs <- tune_grid(
+  tunable_wf %>% add_recipe(stopword_rec("snowball"), blueprint = sparse_bp),
+  scotus_folds,
+  grid = grid_twenty
+)
+
+set.seed(234)
+smart_rs <- tune_grid(
+  tunable_wf %>% add_recipe(stopword_rec("smart"), blueprint = sparse_bp),
+  scotus_folds,
+  grid = grid_twenty
+)
+
+set.seed(345)
+stopwords_iso_rs <- tune_grid(
+  tunable_wf %>% add_recipe(stopword_rec("stopwords-iso"), blueprint = sparse_bp),
+  scotus_folds,
+  grid = grid_twenty
+)
+```
+
+Here, we are testing the mse for three different pre-defined stop words list "snowball", "smart" and "stopwords-iso"
+
+The Snowball lexicon contains the smallest number of word and, in this case, results in the best performance. Removing fewer stop words results in the best performance.
+
+However, the result is not generalizable to all data set and contexts, but the approach is generalizable.
+
+This increase in performance isn’t huge, but removing stop words isn’t computationally slow or difficult so the cost for this improvement is low.
+
+## 6.7 Case study: varying n-grams
+We can use n-grams to integrate different kinds of information into a model. Bigrams and trigrams capture concepts that between words, as well as effects from word order.
+
+This is another part of data preprocessing, so we define this stop as part of our preprocessing recipe 
+```{r eval = FALSE, echo=T}
+ngram_rec <- function(ngram_options) {
+  recipe(year ~ text, data = scotus_train) %>%
+    step_tokenize(text, token = "ngrams", options = ngram_options) %>%
+    step_tokenfilter(text, max_tokens = 1e3) %>%
+    step_tfidf(text)
+}
+```
+The ngram_option we can specify the n and n_min. 
+We can use  n =1 to tokenize and only extract the unigrams or we can use n=3, n_min =1 to identiy the set of all trigrams, bigrams and unigrams.
+```{r eval = FALSE, echo=T}
+tune_ngram <- function(ngram_options) {
+  # a helper function to use tune_grid()
+  tune_grid(
+    tunable_wf %>% add_recipe(ngram_rec(ngram_options), blueprint = sparse_bp),
+    scotus_folds,
+    grid = grid_twenty
+  )
+}
+# predicting using unigrams, bigrams and unigrams
+set.seed(123)
+unigram_rs <- tune_ngram(list(n = 1))
+
+set.seed(234)
+bigram_rs <- tune_ngram(list(n = 2, n_min = 1))
+
+set.seed(345)
+trigram_rs <- tune_ngram(list(n = 3, n_min = 1))
+
+collect_metrics(bigram_rs) # result contains metrics 
+```
+
+Keep in mind that adding n-grams is computationally expensive, especially compared to the improvement in model performance gained. Using bigrams plus unigrams takes more than twice as long to train than only unigrams, and adding in trigrams as well takes almost five times as long as training on unigrams alone.
+
+## 6.8 Case study: lemmatization
+As in previous section, we can normalize words to their roots or lemmas based on each word's context and the structure of a language. It is also a part of data pre-processiong. 
+
+Using lemmatization instead of a more straightforward tokenization strategy is slower because of the increased complexity involved, but it can be worth it.
+
+We use engine = "spacyr" for tokenization (instead of the default) and add step_lemma() to our preprocessing. This step extracts the lemmas from the parsing done by the tokenization engine.
+```{r eval = FALSE, echo=T}
+spacyr::spacy_initialize(entity = FALSE)
+lemma_rec <- recipe(year ~ text, data = scotus_train) %>%
+  step_tokenize(text, engine = "spacyr") %>%
+  step_lemma(text) %>%
+  step_tokenfilter(text, max_tokens = 1e3) %>%
+  step_tfidf(text)
+set.seed(123)
+lemma_rs <- tune_grid(
+  tunable_wf %>% add_recipe(lemma_rec, blueprint = sparse_bp),
+  scotus_folds,
+  grid = grid_twenty
+)
+lemma_rs %>%
+  show_best("rmse") # select best model
+```
+
+## 6.9 What evaluation metrics are appropriate?
+Other metrics can also be appropriate for regression models. Another common set of regression metric options are the various flavors of mean absolute error.
+
+If you know before you fit your model that you want to compute one or more of these metrics, you can specify them in a call to metric_set().
+
+```{r eval = FALSE, echo=T}
+lemma_rs <- tune_grid(
+  tunable_wf %>% add_recipe(lemma_rec),
+  scotus_folds,
+  grid = grid_twenty,
+  metrics = metric_set(mae, mape)
+)
+```
+
+If you have already fit your model, you can still compute and explore non-default metrics as long as you saved the predictions for your resampled datasets using control_resamples(save_pred = TRUE).
+
+
+## Chapter 7 Classification
+We can also use machine learning to predict labels on documents using a classification model. 
+
+```{r message=FALSE, warning=FALSE}
+
+complaints <- read_csv("complaints.csv")
+glimpse(complaints)
+complaints <- complaints %>% filter(`State` == "OH")
+```
+For this data set, we can build a classification model to predict what type of financial product the complaints are referring to. 
+
+## 7.1 A first classification model
+The book build a binary classification model to predict whether a complaint is about "Credit reporting, credit repair service or other personal consumer report" or not. For me, I am predicting if the complaint is about "Mortgage" or not. 
+
+The outcome variable product contains more categories than this, so we need to transform this variable to only contains the values “Mortgage” and “Other”.
+
+
+Our data contains many series of "X"s, which is used to protect personally identifiable information in this publicly available data set. Also note that monetary amounts are surrounded by curly brackets (like "{$21.00}"). We may use regular expression to extract all the dollar amounts. 
+
+## 7.1.1 Building our first classification model
+Now, we can create a factor outcome variable product with two levels, Mortgage or other. Then, we split into training and testing data set.
+```{r}
+set.seed(1234)
+complaints2class <- complaints %>%
+  mutate(Product = factor(if_else(Product == "Mortgage", "Mortgage", "Other"))) %>%
+  rename(consumer_complaint_narrative =`Consumer complaint narrative` )
+
+complaints_split <- initial_split(complaints2class, strata = Product)
+
+complaints_train <- training(complaints_split)
+complaints_test <- testing(complaints_split)
+dim(complaints_train) # dim check
+dim(complaints_test)
+complaints_train
+```
+
+Before modeling, we need to turn our text data into numeric features for machine learning. 
+The recipes package allows us to create a specification of pre-processing stop we want to perform. 
+
+```{r}
+complaints_rec <-
+  recipe(Product ~  consumer_complaint_narrative,
+    data = complaints_train
+  )
+```
+
+Now we add steps to process the text of the complaints. We use textrecipes to handle the consumer_complaint_narrative variables. 
+
+1. First we tokenize the text by using steps_tokenize(). By default this uses tokenizers::tokenize_words()
+2. remove stop words with step_stopwords(), the default is Snowball stop word list, but custom lists can be provided
+3. use step_tokenfilter() to only keep the 500 most frequent tokens to calculate tf-idf to avoid creating too many variables in our first model. 
+4. Lastly, use step_tfidf() to compute tf-idf
+
+```{r}
+library(textrecipes)
+
+complaints_rec <- complaints_rec %>%
+  step_tokenize(consumer_complaint_narrative) %>%
+  step_stopwords(consumer_complaint_narrative) %>%
+  step_tokenfilter(consumer_complaint_narrative, max_tokens = 500) %>%
+  step_tfidf(consumer_complaint_narrative)
+complaints_rec
+```
+
+Now we have a full specification of the preprocessing recipe, we can prep() this recipe to estimate all the necessary parameter for each parameters for each stop using the training data.
+
+
+```{r}
+complaint_prep <- prep(complaints_rec)
+```
+
+For most modeling tasks, you will not need to prep() your recipe directly; instead you can build up a tidymodels workflow() to bundle together your modeling components.
+
+```{r}
+complaint_wf <- workflow() %>%
+  add_recipe(complaints_rec)
+complaint_wf
+```
+We can start with a naive bayes model, because it has the ability to handle a large number of features. 
+
+```{r}
+library(discrim)
+nb_spec <- naive_Bayes() %>%
+  set_mode("classification") %>%
+  set_engine("naivebayes")
+
+nb_spec
+
+nb_fit <- complaint_wf %>%
+  add_model(nb_spec) %>%
+  fit(data = complaints_train)
+```
+We have trained our model
+
+## 7.1.2 Evaluation
+The test set is a precious resource that should only be used at the end of the model training process to estimate performance on new data. Instead, we will use resampling methods to evaluate our model.
+
+Let’s use resampling to estimate the performance of the naive Bayes classification model we just fit. We can do this using resampled datasets built from the training set. 
+
+Let’s create cross 10-fold cross-validation sets, and use these resampled sets for performance estimates.
+
+```{r}
+complaints_folds <- vfold_cv(complaints_train)
+
+complaints_folds
+```
+
+Each of the splits contains 90% of the training data and other 10% is held out for evaluation
+
+```{r}
+nb_wf <- workflow() %>%
+  add_recipe(complaints_rec) %>%
+  add_model(nb_spec)
+
+nb_rs <- fit_resamples(
+  nb_wf,
+  complaints_folds,
+  control = control_resamples(save_pred = TRUE)
+)
+```
+
+Now, to estimate how well that model performs, let’s fit the model many times, once to each of these resampled folds, and then evaluate on the heldout part of each resampled fold.
+
+we can extract the relvant information using collect_metrics() and collect_predictions()
+```{r}
+nb_rs_metrics <- collect_metrics(nb_rs)
+nb_rs_predictions <- collect_predictions(nb_rs)
+nb_rs_metrics
+```
+Our model only has 20% accuracy, because we have reduce our data for it to run on my laptop
+
+Another way to evaluate our model is to evaluate the confusion matrix. A confusion matrix visualizes a model’s false positives and false negatives for each class. 
+
+## 7.2 Compare to the null model
+
+we can assess a model like this one by comparing its performance to a “null model” or baseline model, a simple, non-informative model that always predicts the largest class for classification. 
+
+```{r}
+null_classification <- null_model() %>%
+  set_engine("parsnip") %>%
+  set_mode("classification")
+
+null_rs <- workflow() %>%
+  add_recipe(complaints_rec) %>%
+  add_model(null_classification) %>%
+  fit_resamples(
+    complaints_folds
+  )
+null_rs %>%
+  collect_metrics()
+```
+
+it is has higher accuracy when we just predicts the largest class for classification... 
+
+## 7.3 Compare to an SVM model
+Support vector machines are a class of machine learning model that can be used in regression and classification tasks. While they don’t see widespread use in cutting-edge machine learning research today, they are frequently used in practice and have properties that make them well-suited for text classification.
+
+```{r eval=FALSE}
+#svm_spec <- svm_rbf() %>%
+#  set_mode("classification") %>%
+#  set_engine("liquidSVM")
+
+#svm_wf <- workflow() %>%
+#  add_recipe(complaints_rec) %>%
+#  add_model(svm_spec)
+
+
+#svm_rs <- fit_resamples(
+#  svm_wf,
+#  complaints_folds,
+##  metrics = metric_set(accuracy, sensitivity, specificity),
+#  control = control_resamples(save_pred = TRUE))
+#svm_rs_metrics <- collect_metrics(svm_rs)
+#svm_rs_predictions <- collect_predictions(svm_rs)
+#svm_rs_metrics
+```
+
+
+## 7.4 Two class or multiclass
+It is not always possible to limit a modeling questions to two classes. What to do when we have more than two classes?
+
+Compared to binary classification, there are several additional issues to keep in mind when working with multiclass classification:
+
+1. Many machine learning algorithms do not handle imbalanced data well and are likely to have a hard time predicting minority classes.
+2. Not all machine learning algorithms are built for multiclass classification at all.
+3. Many evaluation metrics need to be reformulated to describe multiclass predictions.
+
+We can formulate the multiclass problem in two ways.
+
+1. any given observation can belong to multiple classes. 
+2. an observation can belong to one and only one class. 
+
+Dealing with imbalanced data using downsampling, where observations from the majority classes are removed during training to achieve a balanced class distribution.
+
+We can use step_downsample() in themis add-on package for recipes. 
+
+
+
+## 7.5 Case study: including non-text data
+Since we the data set includes more than text data alone, so we can add other predictors such as company, state. 
+
+```{r eval = FALSE, echo=T}
+more_vars_rec <-
+  recipe(product ~ date_received + tags + consumer_complaint_narrative,
+    data = complaints_train
+  )
+
+more_vars_rec <- more_vars_rec %>%
+  step_date(date_received, features = c("month", "dow"), role = "dates") %>%
+  step_rm(date_received) %>%
+  step_dummy(has_role("dates"))
+```
+
+We can use the step_date() function to extract the month and day of the week ("dow"). The tags variable has some missing data. We can deal with this by using step_unknown(), which adds a new level to this factor variable for cases of missing data.
+```{r eval = FALSE, echo=T}
+more_vars_rec <- more_vars_rec %>%
+  step_unknown(tags) %>%
+  step_dummy(tags)
+more_vars_rec <- more_vars_rec %>%
+  step_tokenize(consumer_complaint_narrative) %>%
+  step_stopwords(consumer_complaint_narrative) %>%
+  step_tokenfilter(consumer_complaint_narrative, max_tokens = 500) %>%
+  step_tfidf(consumer_complaint_narrative)
+more_vars_wf <- workflow() %>%
+  add_recipe(more_vars_rec) %>%
+  add_model(svm_spec)
+
+# fitting the model
+set.seed(123)
+more_vars_rs <- fit_resamples(
+  more_vars_wf,
+  complaints_folds,
+  metrics = metric_set(accuracy, sensitivity, specificity)
+)
+more_vars_metrics <- collect_metrics(more_vars_rs)
+more_vars_metrics
+```
+Including more predictors improves our model performance. 
+
+## Summary
+Chapter 6-7 taught me how to build regression and classification models using text data set under the tidy model work-flow. 
+
+For both regression and classification, we have to pre-process the data, using tokenization, removing stop words. We can also choose to do an n-gram or lemmatization to improve our performance. After we built the model, we can evaluate our model based on many different metrics. For example, we can use MSE for regression and confusion matrix to see how "accurate" our model is. 
+
+It is worth knowing that for regression, the regularized linear models, such as lasso, often work well for the text data set, but tree-based models such as random forest often behave poorly. In addition, naive Bayes and support vector machine models perform well for the text data, but I do not know them very well. Understanding the model and the text data is incredibly valuable since this knowledge in careful engineering of custom features can improve the model. 
+
+In chapter 7, I wanted to predict whether or not the consumer complained about the mortgage product. However, because our response variable is very imbalanced, our model only has 20% accuracy. From this experience, I learned how important it is to perform EDA before fitting the model. This is the first time my machine learning model took a long time to run, which made me realize that NLP model training is computationally expensive in the real world with a large data set. 
