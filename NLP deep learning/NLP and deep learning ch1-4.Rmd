@@ -1,0 +1,108 @@
+---
+title: "NLP deep learning"
+author: "Haoluan Chen"
+date: "12/6/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(keras)
+```
+
+### Chapter 1 What is deep learning
+
+Artificial intelligence is born in 1950s. A concise definition of the field would be as follows: the effort to automate intellectual tasks normally performed by human. And it is a general field that encompasses machine learning and deep learning, but that also includes many more approaches that don't involve any learning. 
+
+With machine learning, humans input data as well as the answers expected from the data, and out come the rules. These rules can then be applied to new data to produce original answers. To do machine learning we need three things:
+
+* Input data points
+* Examples of the expected output
+* A way to measure whether the algorithm is doing a good job
+
+A machine-learning model transforms its input data into meaningful outputs, a process that is “learned” from exposure to known examples of inputs and outputs. Therefore, the central problem in machine learning and deep learning is to meaningfully transform data: in other words, to learn useful representations of the input data at hand—representations that get us closer to the expected output.
+
+#### What makes deep learning special?
+Deep learning is a specific sub-field of machine learning: a new take on learning representations from data that puts an emphasis on learning successive layers of increasingly meaningful representations. The "deep" in deep learning stands for the idea of successive layers of representations. The number layers contribute to a model of the data is called the depth of the model. 
+
+In deep learning, these layered representations are (almost always) learned via models called neural networks, structured in literal layers stacked on top of each other. For our purposes, deep learning is a mathematical frame-work for learning representations from data. 
+
+The specification of what a layer does to its input data is stored in the layer;s weight, whic in essence are a bunch of numbers. To control the output of a neural network, we use loss function or the objective function to measure how far this output is from what you expected. The loss function takes the predictions of the network and the true target and computes a distance score. Then, use this score as a feedback signal to adjust the value of the weights a little, in a direction that will lower the loss score for the current example. This adjustment is the job of the optimizer, which implements what's called the backpropagation algorithm.
+
+Initially, the weights of network are assigned randomly, so the loss score is very high. But with every example the network processes, the weights are adjusted a little in correct direction and the loss score decrease. This is the training loop, which repeated a sufficient number of times, yields weight values that minimize the loss function. 
+
+There are two essential characteristics of how deep learning learns from data: the incremental, layer-by-layer way in which increasingly complex representations are developed, and the fact that these intermediate incremental representations are learned jointly, each layer being updated to follow both the representational needs of the layer above and the needs of the layer below. Together, these two properties have made deep learning vastly more successful than previous approaches to machine learning.
+
+### Chapter 2 Before we begin: the mathematical building blocks of neural networks
+Keras R package
+
+A tensor is defined by three key attributes:
+* Number of axes(rank) - 3D tensor has three axes, and a matrix has two axes
+*shape - This is an integer vector that describes how many dimensions the tensor has along each axis.
+* Data type - type of the data contained in the tensor
+
+*Element-wise operations* - Are operations that are applied independently to ech entry in the tensors being considered. They are highly amenable to massively parallel implementations.
+
+Operations involving tensors of different dimensions - What happens with addition when the shape of the two tensors being added differ?
+
+The R sweep() function enables you to perform operations between higher dimension tensors and lower-dimension tensors.
+```{r}
+x <- array(round(runif(1000, 0, 9)), dim = c(64, 3, 32, 10)) # x is a tensor of random values with shape (64, 3, 32, 10).
+y <- array(5, dim = c(32, 10))
+# y is a tensor of 5s of shape (32, 10)
+z <- sweep(x, c(3, 4), y, pmax)
+# The output z has shape (64, 3, 32, 10), like x.
+```
+
+*Tensor Dot* - is the most common and useful tensor operation. It combines entries in the input tensors. 
+
+More generally, you can take the dot product between higher-dimensional tensors,
+following the same rules for shape compatibility as outlined earlier for the 2D case:
+(a, b, c, d) . (d) -> (a, b, c)
+(a, b, c, d) . (d, e) -> (a, b, c, e)
+
+*Tensor reshaping*
+You should always use the array_reshape() function when reshaping R arrays that will be passed to Keras
+
+Reshaping a tensor means rearranging its rows and columns to match a traget shape. Naturally, the reshaped tensor has the same total number of coefficients as the initial tensor. Transpose is a special case of reshape. 
+```{r}
+x <- matrix(c(0, 1,2, 3, 4, 5), nrow = 3, ncol = 2, byrow = TRUE)
+x
+x <- array_reshape(x, dim = c(6, 1))
+x
+```
+
+### 2.4 The engine of neural networks: gradient-based optimization
+output = relu(dot(w,input) + b)
+In this example, W and b are tensors that are attributes of the layer. They are called weights or trainable parameters of the layer. The weights contain the information learned by the network from exposure to training data. 
+
+Initially, the weight matrices are fileld with small random values (a step called *random initialization*). The resulting representations are meaningless, but they are a starting point. What comes next is to gradually adjust these weights, based on a feedback signal. This gradual adjustment, also called training, is basically the learning that meachine learning is all about. 
+
+What happens in training loop: 
+
+1. Draw a batch of training sample x and corresponding target y.
+2. Run the network on x (a step called the forward pass) to obtain predictions y_pred.
+3. Compute the loss of the network on the batch, a measure of the mismatch between y-pred and y
+4. Update all weights of the network in a way that slightly reduces the loss on this batch.
+
+Eventually... end up with a network that has a very low loss on the training data. 
+
+#### 2.4.3 Stochastic gradient descent 
+Mini-batch stochastic gradient descent:
+
+1. Draw a batch of training samples x and corresponding targets y
+2. Run the network on x to obtain predictions y_pred 
+3. Compute th eloss of the network on the batch, a measure of the mismatch between y_pred and y
+4. Compute the gradient of the loss with regard to the network's parameters
+5. Move the parameters a little in the opposite direction for the gradient (W = W-(step * gradient))
+
+A variant of the mini-batch SGD algorithm would be to draw a single sample and target at each iterations, rather than drawing a batch of data. Going to the opposite extreme, you could run every step on all data available, which is called batch SGD. Each update would be more accurate but far more expensive. The efficient compromise between these two extremes is to use mini-batches of reasonable size.
+
+Additionally, there is other variants of SGD that taking the previous weight updates into account. For instance, SGD with momentum, which avoids stuck at the local minimum. 
+
+it’s important to pick a reasonable value for the step factor. If it’s too small, the descent down the curve will take many iterations, and it could get stuck in a local minimum. If step is too large, your updates may end up taking you to completely random locations on the curve.
+
+#### 2.4.4 Chaining derivatives: the Backpropagation algorithm
+Backpropagation (sometimes called reverse-mode differentation) - starts with the final loss value and works backward from the top layers to the bottom layers, applying the chain rule to compute the contribution that each parameter had in the loss value. 
+
+Nowadays, people will implement networks in modern frameworks that are capable of symbolic differentiation, such as  TensorFlow. This means that given a chain of operations with a knwon deriative, they can compute a gradient function for the chain (by applying chain rule) that maps network parameter values to gradient values. 
